@@ -87,7 +87,7 @@ setup(
     long_description_content_type="text/markdown",
     classifiers=[
         "Programming Language :: Python :: 3",
-        "License :: OSI Approved :: EUPL-1.1 License",
+        "License :: Freeware",
         "Topic :: Software Development :: Libraries :: Python Modules",
         'Programming Language :: Python :: 3 :: Only',
         "Development Status :: 5 - Production/Stable",

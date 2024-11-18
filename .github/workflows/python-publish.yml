@@ -11,33 +11,33 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Checkout the repository
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      # Set up Python environment
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.x'
 
-      # Upgrade pip
       - name: Upgrade pip
         run: pip install --upgrade pip
 
-      # Install required dependencies
       - name: Install build dependencies
         run: pip install setuptools wheel twine build
 
-      # Build the distribution files
       - name: Build the package
         run: python -m build
 
-      # Publish to PyPI and TestPyPI
-      - name: Publish to PyPI and TestPyPI
+      - name: Publish to PyPI
         env:
           TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
           TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
         run: |
           twine upload --repository pypi dist/* --verbose
-          #twine upload --repository testpypi dist/* --verbose
+
+      - name: Publish to TestPyPI
+        env:
+          TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
+          TWINE_PASSWORD: ${{ secrets.TEST_PYPI_API_TOKEN }}
+        run: |
+          twine upload --repository testpypi dist/* --verbose

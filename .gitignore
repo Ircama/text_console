@@ -163,3 +163,5 @@ cython_debug/
 test.py
 .console_history
 text_console.py
+Gemfile.lock
+_site/

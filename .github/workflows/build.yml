@@ -22,7 +22,7 @@ jobs:
           if ($VERSION.StartsWith('v')) {
               $VERSION = $VERSION.Substring(1)
           }
-          (Get-Content $filePath) -replace '^__version__ = ".*"$', "VERSION = `"$VERSION`"" | Set-Content $filePath
+          (Get-Content $filePath) -replace '^__version__ = ".*"$', "__version__ = `"$VERSION`"" | Set-Content $filePath
           git config --local user.name "github-actions[bot]"
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git remote set-url origin https://${GITHUB_USER}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}

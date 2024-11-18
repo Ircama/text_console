@@ -26,22 +26,18 @@ Each of these can be customized by subclassing TextConsole and overriding the ap
 
 ## Installation
 
+### From pypi
+
 ```bash
 pip install text-console
 ```
 
-### Packaging
+### From sources
 
-Run `python setup.py sdist bdist_wheel` to package it.
-
-Install with `pip install dist/text_console-1.0.0-py3-none-any.whl`.
-
-To install the package:
-
-Navigate to the directory containing setup.py
+Navigate to the directory containing *setup.py*. Run:
 
 ```
-Run pip install .
+pip install .
 ```
 
 ## Usage
@@ -138,6 +134,18 @@ class MyCustomConsole(TextConsole):
     
     def create_menu(self, master):
         # Override to create a custom menu
+        super().create_menu(main, master)
+        
+        # Add "Web Site" to the Help menu
+        menu_bar = master.nametowidget(master.cget('menu'))  # Get the menu widget
+        help_menu = list(menu_bar.children.values())[2]  # Access the Help menu (third = 2)
+        help_menu.insert_command(
+            help_menu.index("end"),
+            label="Web Site",
+            command=self.new_action
+        )
+
+        # Override to create a custom menu
         menu_bar = Menu(master)
         master.config(menu=menu_bar)
         
@@ -146,34 +154,50 @@ class MyCustomConsole(TextConsole):
         custom_menu.add_command(label="My Action", command=self.custom_action)
         menu_bar.add_cascade(label="Custom", menu=custom_menu)
 
+    def new_action(self):
+        pass
+
+    """ Alternatively, override create_menu:
+    def create_menu(self, master):
+        # Override to create a custom menu
+        menu_bar = Menu(master)
+        master.config(menu=menu_bar)
+        
+        # Custom menu items
+        custom_menu = Menu(menu_bar, tearoff=0)
+        custom_menu.add_command(label="My Action", command=self.custom_action)
+        menu_bar.add_cascade(label="Custom", menu=custom_menu)
+    """
+
+
 # Use the custom console
 text_console = MyCustomConsole(main, master)
 ```
 
-## key bindings
+## Key bindings
 
 The text_console module provides the following key bindings for efficient navigation and interaction:
 
-- Ctrl + Enter (<Control-Return>)
+- `Ctrl + Enter (<Control-Return>)`
 
   Submit a command while keeping the current context open.
 
-- Shift + Enter (<Shift-Return>)
+- `Shift + Enter (<Shift-Return>)`
 
   Insert a newline without triggering a default submission action.
 
-- Tab (<Tab>)
+- `Tab (<Tab>)`
 
   Indent input.
 
-- Down Arrow (<Down>)
+- `Down Arrow (<Down>)`
 
   Next command from the history.
 
-- Up Arrow (<Up>)
+- `Up Arrow (<Up>)`
 
   Previous command from the history.
 
-- Right-Click (<Button-3>)
+- `Right-Click (<Button-3>)`
 
   Displays the context menu.

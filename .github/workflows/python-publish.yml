@@ -1,9 +1,10 @@
 name: Publish Package to PyPI and TestPyPI
 
+# Only trigger, when the build workflow succeeded
 on:
-  push:
-    tags:
-      - 'v*'  # Trigger workflow on tags matching 'v*'
+  workflow_run:
+    workflows: ["Build Workflow for text_console.exe/zip"]
+    types: [completed]
 
 jobs:
   build-and-publish:

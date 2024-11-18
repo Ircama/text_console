@@ -87,7 +87,7 @@ setup(
     long_description_content_type="text/markdown",
     classifiers=[
         "Programming Language :: Python :: 3",
-        "License :: Freeware",
+        "License :: OSI Approved :: European Union Public Licence 1.2 (EUPL 1.2)",
         "Topic :: Software Development :: Libraries :: Python Modules",
         'Programming Language :: Python :: 3 :: Only',
         "Development Status :: 5 - Production/Stable",
@@ -97,7 +97,7 @@ setup(
     keywords=("shell console tkinter"),
     author="Ircama",
     url="https://github.com/Ircama/text_console",
-    license='EUPL-1.1',
+    license='EUPL-1.2',
     packages=find_packages(),
     entry_points={
     'console_scripts': [

@@ -1,9 +1,10 @@
 name: Publish Package to PyPI and TestPyPI
 
+# Only trigger, when the build workflow succeeded
 on:
-  push:
-    tags:
-      - 'v*'  # Trigger workflow on tags matching 'v*'
+  workflow_run:
+    workflows: ["Build Workflow for text_console.exe/zip"]
+    types: [completed]
 
 jobs:
   build-and-publish:
@@ -40,4 +41,4 @@ jobs:
           TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
           TWINE_PASSWORD: ${{ secrets.TEST_PYPI_API_TOKEN }}
         run: |
-          twine upload --repository testpypi dist/* --verbose
+          twine upload --repository testpypi dist/*.tar.gz --verbose

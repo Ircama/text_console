@@ -134,7 +134,7 @@ class BaseTextConsole(tk.Text):
 
         # Help menu
         help_menu = Menu(menu_bar, tearoff=0)
-        help_menu.add_command(label="Help", command=self.show_help)
+        help_menu.add_command(label="Usage", command=self.show_help)
         help_menu.add_command(label="About", command=self.show_about)
         menu_bar.add_cascade(label="Help", menu=help_menu)
 
@@ -145,7 +145,7 @@ class BaseTextConsole(tk.Text):
     def show_help(self):
         """Show help window - can be overridden by subclasses"""
         help_window = tk.Toplevel(self)
-        help_window.title("Help")
+        help_window.title("Usage")
         help_window.geometry("600x400")
 
         # Add a scrollbar and text widget
@@ -174,8 +174,9 @@ class BaseTextConsole(tk.Text):
             tk.END,
             (
                 "- Clear Console: Clears all text in the console.\n"
-                "- Context Menu: Right-click for cut, copy, paste, or clear.\n"
-                "- Help: Provides this text.\n\n"
+                "- History: Open a separate window showing the list of"
+                " successfully executed commands (browse the command history).\n"
+                "- Context Menu: Right-click for cut, copy, paste, or clear.\n\n"
             )
         )
         help_text.insert(

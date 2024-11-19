@@ -101,7 +101,7 @@ setup(
     packages=find_packages(),
     entry_points={
     'console_scripts': [
-        'text_console = text_console:main',
+        'text_console = text_console.__main__:main',
     ]},
     python_requires='>3.6'
 )

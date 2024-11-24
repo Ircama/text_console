@@ -1,4 +1,4 @@
-remote_theme: Ircama/just-the-docs
+remote_theme: ircama/just-the-readme
 
 # Enable or disable the site search
 # Supports true (default) or false
@@ -52,7 +52,7 @@ aux_links_new_tab: true
 
 # Enable or disable the side/mobile menu globally
 # Nav menu can also be selectively enabled or disabled using page variables or the minimal layout
-nav_enabled: false
+nav_enabled: true
 
 # Sort order for navigation links
 # nav_sort: case_insensitive # default, equivalent to nil
@@ -122,8 +122,8 @@ plugins:
   - jekyll-github-metadata
   - jekyll-sitemap
   - jekyll-autolinks
-  - jekyll-remote-theme # Add if not already present
   - jekyll-include-cache # Optional, for caching
+  - jekyll-remote-theme # Add if not already present
 
 kramdown:
   syntax_highlighter_opts:

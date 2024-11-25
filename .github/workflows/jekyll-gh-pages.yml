@@ -53,6 +53,7 @@ jobs:
           .
           wq
           EOF
+          mv .jekyll-gh-pages/* .
       - name: Build Jekyll Site
         run: bundle exec jekyll build
       - name: Upload artifact for Pages

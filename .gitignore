@@ -165,3 +165,4 @@ test.py
 text_console.py
 Gemfile.lock
 _site/
+.jekyll-gh-pages/*.md

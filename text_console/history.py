@@ -1,14 +1,28 @@
 import os
+import pickle
 
 class History(list):
     def __init__(self, history_file=".console_history"):
         super().__init__()
         self.history_file = history_file
 
-        # Load history from the file
         if os.path.exists(self.history_file):
-            with open(self.history_file, "r", encoding="utf-8") as file:
-                self.extend(line.strip() for line in file if line.strip())
+            try:
+                # Try loading pickled history (preferred)
+                with open(self.history_file, "rb") as f:
+                    data = pickle.load(f)
+                    # Ensure all entries are strings
+                    for entry in data:
+                        if not isinstance(entry, str):
+                            raise ValueError
+                    self.extend(data)
+            except Exception:
+                # Fallback: legacy line-by-line text file
+                with open(self.history_file, "r", encoding="utf-8") as f:
+                    for line in f:
+                        txt = line.rstrip("\n")
+                        if txt:
+                            self.append(txt)
 
     def __getitem__(self, index):
         try:
@@ -17,12 +31,14 @@ class History(list):
             return None
 
     def append(self, item):
-        # Ensure only strings are added
+        # Convert lists to true multiline strings
         if isinstance(item, list):
-            item = " ".join(item)  # Convert list to string
+            item = "\n".join(item)
+        elif not isinstance(item, str):
+            item = str(item)
         super().append(item)
 
     def save(self):
-        # Save history back to the file
-        with open(self.history_file, "w", encoding="utf-8") as file:
-            file.writelines(item + "\n" for item in self)
+        # Pickle the list of strings so embedded newlines survive
+        with open(self.history_file, "wb") as f:
+            pickle.dump(list(self), f)

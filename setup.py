@@ -73,7 +73,7 @@ if os.environ.get('GITHUB_RUN_NUMBER') is not None:
                     ', '.join(version_list_testpypi))
             print('---------------------------------'
                 '---------------------------------')
-            verstr += '-' + os.environ['GITHUB_RUN_NUMBER']
+            verstr += '.post' + os.environ['GITHUB_RUN_NUMBER']
     except Exception as e:
         print("Cannot use pypi or testpypi for getting the version:", e)
         

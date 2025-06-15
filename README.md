@@ -8,7 +8,8 @@ The package is installable via pip.
 
 ## Features
 
-- Tkinter-based package
+- Tkinter-based package.
+- Full multi-line commands support.
 - Customizable history file.
 - Context menu with options for Cut, Copy, Paste, and Clear.
 - Extendable for additional functionality.

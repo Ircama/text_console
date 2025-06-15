@@ -50,32 +50,6 @@ if mo:
     verstr = mo.group(1)
 else:
     raise RuntimeError("Unable to find version string in %s." % (VERSIONFILE,))
-
-if os.environ.get('GITHUB_RUN_NUMBER') is not None:
-    try:
-        version_list_pypi = [
-            a for a in versions(PACKAGE_NAME, 'pypi') if a.startswith(verstr)]
-        version_list_testpypi = [
-            a for a in versions(PACKAGE_NAME, 'testpypi') if a.startswith(verstr)]
-        if (version_list_pypi or
-                version_list_testpypi or
-                os.environ.get('GITHUB_FORCE_RUN_NUMBER') is not None):
-            print('---------------------------------'
-                '---------------------------------')
-            print("Using build number " + os.environ['GITHUB_RUN_NUMBER'])
-            if version_list_pypi:
-                print(
-                    "Version list available in pypi: " +
-                    ', '.join(version_list_pypi))
-            if version_list_testpypi:
-                print(
-                    "Version list available in testpypi: " +
-                    ', '.join(version_list_testpypi))
-            print('---------------------------------'
-                '---------------------------------')
-            verstr += '.post' + os.environ['GITHUB_RUN_NUMBER']
-    except Exception as e:
-        print("Cannot use pypi or testpypi for getting the version:", e)
         
 
 setup(

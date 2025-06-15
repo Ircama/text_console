@@ -1,29 +1,39 @@
 # text_console
 
-A customizable Tkinter-based text console widget with support for command history and interactive execution, in which a user types in commands to be sent to the Python interpreter.
+*text_console* is a customizable, Tkinter-based interactive shell widget that lets users type commands into a console pane and have them evaluated in your application’s Python environment. It supports arrows and command history. It’s designed for embedding in GUI apps, debugging, scripting, and educational tools.
 
-It includes options for overriding specific variables through subclassing, by extending the `TextConsole` class.
+## Key Features
 
-The package is installable via pip.
+- **Live code execution**
 
-## Features
+  Send single- or multi-line Python code to the interpreter and see results immediately.
 
-- Tkinter-based package.
-- Full multi-line commands support.
-- Customizable history file.
-- Context menu with options for Cut, Copy, Paste, and Clear.
-- Extendable for additional functionality.
+- **Integrated application context**
 
-The package provides flexibility to customize:
+  Access and modify your app’s variables and functions via the console_locals namespace.
 
-- `history_file`: Change the location of the history file
-- `console_locals`: Add custom variables and functions to the console's namespace
-- `context_menu_items`: Modify the right-click context menu
-- `show_about_message`: Customize the about dialog content
-- `show_help_content`: Customize the help window content
-- `create_menu`: Override to completely customize the menu bar
+- **Command history**
 
-Each of these can be customized by subclassing TextConsole and overriding the appropriate attributes or methods.
+  Navigate previous commands with ↑/↓ arrows; history is saved to a file you choose.
+
+- **Cut/Copy/Paste/Clear**
+
+  Right-click context menu (and customizable via context_menu_items) for text editing.
+
+- **Customizable UI**
+
+  The package provides flexibility to customize:
+
+  - `history_file`: Change the location of the history file
+  - `console_locals`: Add custom variables and functions to the console's namespace
+  - `context_menu_items`: Modify the right-click context menu
+  - `show_about_message`: Customize the about dialog content
+  - `show_help_content`: Customize the help window content
+  - `create_menu`: Override to completely customize the menu bar
+
+- **Subclass-friendly**
+
+  Extend the TextConsole class and override any of the above to fit your needs.
 
 ## Installation
 

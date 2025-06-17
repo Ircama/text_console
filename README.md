@@ -4,7 +4,7 @@
 
 It can also be used as a standalone Python command interpreter.
 
-This program is similar to [wxPython Shell](https://github.com/wxWidgets/wxPython-Classic/blob/master/wx/py/shell.py), implemented using Tkinter.
+This program reflects the core functionality of [wxPython Shell](https://github.com/wxWidgets/wxPython-Classic/blob/master/wx/py/shell.py), offering an even richer feature set.
 
 ## Key Features
 
@@ -49,6 +49,36 @@ This program is similar to [wxPython Shell](https://github.com/wxWidgets/wxPytho
 - **Subclass-friendly**
 
   Extend the TextConsole class and override any of the above to fit your needs.
+
+## Keyboard shortcuts
+
+| Shortcut                | Description                                                                                      |
+|-------------------------|--------------------------------------------------------------------------------------------------|
+| Return                  | Execute current command; if editing mid-line or multiline, show modal allowing to select either to run the code or insert a linefeed in the cursor position.               |
+| Shift+Return            | Insert a new line within the edited multiline command.                                       |
+| Control+Return          | Move the cursor to the end of the last line of input.                                            |
+| Tab                     | Indent code (up to 4 spaces); if selection, indent all selected lines.                           |
+| Shift+Tab               | Un-indent (remove up to 4 spaces before cursor).                               |
+| Down Arrow              | Navigate to next command in history.                                       |
+| Up Arrow                | Navigate to previous command in history.                                  |
+| Left Arrow              | Move to previous non-tagged character.                 |
+| Right Arrow             | Move to next non-tagged character.                     |
+| Control+Left Arrow      | Move to previous word.                                                           |
+| Control+Right Arrow     | Move to next word.                                                           |
+
+| Escape                  | Jump to last blank command (empty input) in history.                                             |
+| BackSpace               | Delete character before cursor.      |
+| Control+C               | Copy selected code, removing prompts first.                                                      |
+| Control+V               | Paste text from clipboard, handling prompts and multiline input.                                 |
+| Button-3 (Right Click)  | Show context menu (Cut, Copy, Paste, Clear).                                                     |
+| Control+Z               | Undo last edit (safe, ignores errors).                                                           |
+| Control+Y               | Redo last undone edit (safe, ignores errors).                                                    |
+| Control+R               | Remove the current element from the history.                                                    |
+| Home                    | Move cursor to start of current line.                                                            |
+| End                     | Move cursor to end of current line.                                                              |
+| Control+P               | Increase font size.                                                           |
+| Control+O               | Decrease font size.                                                           |
+| Control+I               | Reset font size.                                                           |
 
 ## Installation
 

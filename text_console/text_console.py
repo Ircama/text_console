@@ -145,6 +145,55 @@ class BaseTextConsole(tk.Text):
         self.bind("<KeyPress>", self.on_key_press)
         self.bind("<Home>", lambda e: self._move_to_line_start(e))
         self.bind("<End>", lambda e: self._move_to_line_end(e))
+        self.bind('<Control-r>', self.remove_current_history_entry)
+        self.bind('<Control-p>', self.increase_font_size)
+        self.bind('<Control-o>', self.decrease_font_size)
+        self.bind('<Control-i>', self.reset_font_size)
+
+    def get_font(self):
+        font_name = self.cget("font")
+        return tkfont.nametofont(font_name)
+
+    def set_font_size(self, size):
+        font_obj = self.get_font()
+        font_obj.configure(size=size)
+        self.setup_tags()  # Update tag fonts as well
+
+    def increase_font_size(self, event=None):
+        font_obj = self.get_font()
+        size = font_obj.actual("size")
+        self.set_font_size(size + 1)
+        return "break"
+
+    def decrease_font_size(self, event=None):
+        font_obj = self.get_font()
+        size = font_obj.actual("size")
+        if size > 4:
+            self.set_font_size(size - 1)
+        return "break"
+
+    def reset_font_size(self, event=None):
+        self.set_font_size(12)  # Default size
+        return "break"
+
+    def remove_current_history_entry(self, event=None):
+        """
+        Remove the currently retrieved element from the history.
+        Only works if a history item is currently loaded (not blank input).
+        """
+        # Only remove if _hist_item is valid and in range
+        if getattr(self, '_hist_item', None) is not None and 0 <= self._hist_item < len(self.history):
+            del self.history[self._hist_item]
+            # After deletion, adjust _hist_item to point to next item or end
+            if self._hist_item >= len(self.history):
+                self._hist_item = len(self.history)
+                self.delete('input', 'end')
+                self.insert('insert', '')
+            else:
+                # Show the next item in history if available
+                self.insert_cmd(self.history[self._hist_item] if self._hist_item < len(self.history) else '')
+            self.history.save()
+        return "break"
 
     def _safe_undo(self):
         try:

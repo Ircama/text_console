@@ -66,7 +66,10 @@ class BaseTextConsole(tk.Text):
         self._prompt1 = kw.pop('prompt1')
         self._prompt2 = kw.pop('prompt2')
         banner = kw.pop('banner', 'Python %s\n' % sys.version)
-        
+
+        # Enable undo/redo
+        kw.setdefault('undo', True)
+
         super().__init__(master, **kw)
         
         # Initialize console with merged locals
@@ -81,7 +84,7 @@ class BaseTextConsole(tk.Text):
         
         # Initialize history
         self.history = History(self.history_file)
-        self._hist_item = 0
+        self._hist_item = len(self.history)
         self._hist_match = ''
         
         # Initialize settings
@@ -118,22 +121,42 @@ class BaseTextConsole(tk.Text):
             foreground="green",
             font=("Courier", font_size - 2)
         )
-        self.tag_configure("input_color", foreground="blue")
+        self.tag_configure("output", foreground="#00178c")
 
     def setup_bindings(self):
         """Set up key bindings"""
-        self.bind('<Control-Return>', self.on_ctrl_return)
-        self.bind('<Shift-Return>', self.on_shift_return)
-        self.bind('<KeyPress>', self.on_key_press)
-        self.bind('<KeyRelease>', self.on_key_release)
+        self.bind('<Shift-Return>', self.insert_line)
+        self.bind('<Control-Return>', self.go_to_end)
         self.bind('<Tab>', self.on_tab)
+        self.bind("<Shift-Tab>", self.on_shift_tab)
         self.bind('<Down>', self.on_down)
         self.bind('<Up>', self.on_up)
+        self.bind("<Escape>", self.on_escape)
         self.bind('<Return>', self.on_return)
         self.bind('<BackSpace>', self.on_backspace)
         self.bind('<Control-c>', self.on_ctrl_c)
         self.bind('<<Paste>>', self.on_paste)
         self.bind("<Button-3>", self.show_context_menu)
+        self.bind("<Control-z>", lambda e: self._safe_undo())
+        self.bind("<Control-y>", lambda e: self._safe_redo())
+        self.bind("<KeyRelease>", lambda e: self.edit_separator())
+        self.bind("<Left>", lambda e: self.after_idle(self._process_arrows, "Left"))
+        self.bind("<Right>", lambda e: self.after_idle(self._process_arrows, "Right"))
+        self.bind("<KeyPress>", self.on_key_press)
+        self.bind("<Home>", lambda e: self._move_to_line_start(e))
+        self.bind("<End>", lambda e: self._move_to_line_end(e))
+
+    def _safe_undo(self):
+        try:
+            self.edit_undo()
+        except tk.TclError:
+            pass
+
+    def _safe_redo(self):
+        try:
+            self.edit_redo()
+        except tk.TclError:
+            pass
 
     def setup_context_menu(self):
         """Set up the context menu"""
@@ -153,7 +176,7 @@ class BaseTextConsole(tk.Text):
 
         # File menu
         file_menu = Menu(menu_bar, tearoff=0)
-        file_menu.add_command(label="Clear Console", command=self.clear_console)
+        file_menu.add_command(label="Clear Console", command=self.clear)
         if master != main:
             file_menu.add_command(label="Close Window", command=master.destroy)
         file_menu.add_command(label="Quit Application", command=self.quit)
@@ -245,10 +268,6 @@ class BaseTextConsole(tk.Text):
         help_text.pack(fill="both", expand=True)
         scrollbar.config(command=help_text.yview)
 
-    def clear_console(self):
-        """Clear the text in the console."""
-        self.clear()
-
     def show_context_menu(self, event):
         """Show the context menu at the cursor position."""
         self.context_menu.post(event.x_root, event.y_root)
@@ -277,8 +296,10 @@ class BaseTextConsole(tk.Text):
     def clear(self):
         """Clear all text from the console."""
         self.delete("1.0", "end")
-        self.insert("1.0", self._prompt1)  # Reinsert the prompt
-        self.delete('input', 'insert lineend')
+        self.insert('end', self._prompt1, 'prompt')
+        self.mark_set('input', 'end-1c')
+        self.edit_reset()
+
 
     def dump_history(self):
         """Open a separate window with the output of the history."""
@@ -355,7 +376,7 @@ class BaseTextConsole(tk.Text):
                 # Fallback if widget not yet rendered
                 widget_width = max(100, (history_window.winfo_width() - 80) // 8)
             
-            # Find the longest command to determine if we need horizontal scrolling
+            # Find the longest command to determine if we need to use horizontal scrolling
             max_command_length = 0
             for command in self.history:
                 for line in str(command).split('\n'):
@@ -502,8 +523,36 @@ class BaseTextConsole(tk.Text):
         if sel:
             self.delete('sel.first', 'sel.last')
         txt = self.clipboard_get()
-        self.insert("insert", txt)
-        self.insert_cmd(self.get("input", "end"))
+
+        # Check if input is blank (no user command present)
+        current_input = self.get('input', 'end-1c')
+        if not current_input.strip():
+            self.insert("insert", txt, "input")
+            self.insert_cmd(self.get("input", "end"))
+        else:
+            if '\n' not in current_input:
+                self.insert("insert", txt, "input")
+            else:
+                # Multiline: insert at cursor, preserving line breaks and adding prompt
+                cursor_index = self.index("insert")
+                line_idx, col_idx = map(int, cursor_index.split('.'))
+                prompt = self._prompt2 if hasattr(self, '_prompt2') else '... '
+                lines = txt.splitlines()
+
+                # Insert the first line at the cursor position
+                self.insert("insert", lines[0])
+
+                # For subsequent lines, insert a newline, prompt, and the line
+                for line in lines[1:]:
+                    self.insert("insert", "\n")
+                    self.insert("insert", prompt, "prompt")
+                    self.insert("insert", line)
+
+                if len(lines) > 1:
+                    # Move cursor to the end of the input multiline text
+                    self.mark_set("insert", "end-1c")
+                    self.see("insert")
+
         return 'break'
 
     def prompt(self, result=False):
@@ -513,29 +562,88 @@ class BaseTextConsole(tk.Text):
         else:
             self.insert('end', self._prompt1, 'prompt')
         self.mark_set('input', 'end-1c')
+        self.edit_reset()
 
-    def on_key_press(self, event):
-        """Prevent text insertion in command history"""
-        if self.compare('insert', '<', 'input') and event.keysym not in ['Left', 'Right']:
-            self._hist_item = len(self.history)
-            if not event.char.isalnum():
-                return 'break'
-        else:
-            if event.keysym not in ['Return']:
-                self.tag_add("input_color", "input", "insert lineend")
+    def insert_prompt(self, prompt_type="primary", index="insert"):
+        """
+        Insert the prompt at the given index with the correct tag.
+        prompt_type: "primary" for >>>, "secondary" for ...
+        """
+        if prompt_type == "primary":
+            self.insert(index, self._prompt1, "prompt")
+            self.edit_reset()
+        elif prompt_type == "secondary":
+            self.insert(index, self._prompt2, "prompt")
 
-    def on_key_release(self, event):
-        """Reset history scrolling"""
-        if self.compare('insert', '<', 'input') and event.keysym not in ['Left', 'Right']:
-            self._hist_item = len(self.history)
-            return 'break'
+    def is_command_edited(self):
+        """
+        Returns True if the current input (with prompts removed) is different from the current history entry.
+        """
+        # Get the raw input text
+        current_input = self.get('input', 'end-1c')
+        # Remove all prompts (">>> " and "... ") from the beginning of each line
+        lines = current_input.splitlines()
+        cleaned_lines = []
+        for line in lines:
+            if line.startswith(self._prompt1):
+                cleaned_lines.append(line[len(self._prompt1):])
+            elif line.startswith(self._prompt2):
+                cleaned_lines.append(line[len(self._prompt2):])
+            else:
+                cleaned_lines.append(line)
+        cleaned_input = '\n'.join(cleaned_lines)
+
+        # If _hist_item is None or out of range, treat as blank/new input
+        if getattr(self, '_hist_item', None) is not None and 0 <= self._hist_item < len(self.history):
+            history_entry = self.history[self._hist_item]
         else:
-            if event.keysym not in ['Return']:
-                self.tag_add("input_color", "input", "insert lineend")
+            history_entry = ''
+        return cleaned_input.strip() != history_entry.strip()
+
+    def flash_prompt_warning(self, duration=200):
+        """
+        Temporarily reverse the foreground and background colors of the prompt tag as a warning.
+        """
+        # Get current colors
+        self.tag_configure("prompt", background="red")
+        # Restore after duration
+        self.after(duration, lambda: self.tag_configure("prompt", background="white"))
+
+    def on_escape(self, event=None):
+        """
+        When pressing Esc, jump to the last blank command (empty input) in history.
+        """
+        """
+        if self.is_command_edited():
+            self.flash_prompt_warning()
+            return "break"
+        """
+        self.edit_separator()
+        line = self._hist_match
+        self._hist_item = len(self.history)
+
+        self._hist_item = len(self.history)
+        self.delete('input', 'end')
+        self.insert('insert', line)
+        self.edit_reset()
+
+        return 'break'
 
     def on_up(self, event):
         """Handle up arrow key press: navigate history only from first line"""
+        try:
+            self.index("sel.first")
+            # There is a selection, do nothing
+        except tk.TclError:
+            # No selection
+            if self.tag_names("insert"):
+                self.edit_reset()
+                return "break"
+        self.edit_separator()
         if self.compare('insert linestart', '==', 'input linestart'):
+            if self.is_command_edited():
+                self.flash_prompt_warning()
+                return "break"
             # Get current input line for matching
             first_line_input = self.get('input', 'insert')
             
@@ -575,6 +683,7 @@ class BaseTextConsole(tk.Text):
                     # No matches at all, restore to end position
                     self._hist_item = len(self.history)
             
+            self.edit_reset()
             return 'break'
         
         # Allow normal movement within multiline input
@@ -582,7 +691,19 @@ class BaseTextConsole(tk.Text):
 
     def on_down(self, event):
         """Handle down arrow key press: navigate history only from last line"""
+        try:
+            self.index("sel.first")
+            # There is a selection, do nothing
+        except tk.TclError:
+            # No selection
+            if self.tag_names("insert"):
+                self.edit_reset()
+                return "break"
+        self.edit_separator()
         if self.compare('insert lineend', '==', 'end-1c'):
+            if self.is_command_edited():
+                self.flash_prompt_warning()
+                return "break"
             line = self._hist_match
             self._hist_item += 1
 
@@ -600,12 +721,48 @@ class BaseTextConsole(tk.Text):
                 self.delete('input', 'end')
                 self.insert('insert', line)
 
+            self.edit_reset()
             return 'break'
         # Else: allow normal movement within multiline
         return
 
+    def on_shift_tab(self, event):
+        """
+        Move the cursor back by up to 4 spaces if possible (like un-indenting),
+        but do not move back if at the beginning of a line after the prompt.
+        """
+        cursor_index = self.index("insert")
+        line_start = self.index(f"{cursor_index} linestart")
+        line_text = self.get(line_start, f"{line_start} lineend")
+
+        # Determine prompt length for this line
+        if line_text.startswith(self._prompt1):
+            prompt_len = len(self._prompt1)
+        elif line_text.startswith(self._prompt2):
+            prompt_len = len(self._prompt2)
+        else:
+            prompt_len = 0
+
+        prompt_end = f"{line_start}+{prompt_len}c"
+        # If at the beginning of input (just after prompt), do nothing
+        if self.compare(cursor_index, "==", prompt_end):
+            return "break"
+
+        before_cursor = self.get(line_start, cursor_index)
+        # Count spaces before cursor (up to 4)
+        spaces = 0
+        for c in reversed(before_cursor):
+            if c == " " and spaces < 4:
+                spaces += 1
+            else:
+                break
+        if spaces > 0:
+            self.delete(f"{cursor_index} -{spaces}c", cursor_index)
+        return "break"
+
     def on_tab(self, event):
         """Handle tab key press"""
+        self.edit_separator()
         if self.compare('insert', '<', 'input'):
             self.mark_set('insert', 'input lineend')
             return "break"
@@ -624,44 +781,219 @@ class BaseTextConsole(tk.Text):
                 self.insert('insert', '    ')
         return "break"
 
-    def on_shift_return(self, event):
-        """Handle Shift+Return key press"""
-        if self.compare('insert', '<', 'input'):
-            self.mark_set('insert', 'input lineend')
-            return 'break'
-        else: # execute commands
-            self.mark_set('insert', 'end')
-            self.insert('insert', '\n')
-            self.insert('insert', self._prompt2, 'prompt')
-            self.eval_current(True)
-
-    def on_return(self, event=None):
-        """Handle Return key press"""
-        if self.compare('insert', '<', 'input'):
-            self.mark_set('insert', 'input lineend')
-            return 'break'
-        else:
-            # Check if we're at the end of the input (last line, end position)
-            input_end = self.index('end-1c')  # End of all text
-            insert_pos = self.index('insert')
-            
-            # If we're not at the very end of the input, just insert a new line
-            if not self.compare('insert', '==', 'end-1c'):
-                # We're in the middle of the multiline input, just add a newline
-                self.insert('insert', '\n')
-                # Add appropriate prompt for continuation
-                self.insert('insert', self._prompt2, 'prompt')
-                return 'break'
-            
-            # We're at the end, so execute the command
-            self.eval_current(True)
-            self.see('end')
-            self.history.save()
+    def go_to_end(self, event):
+        """Move the cursor to the end of the last line of input."""
+        self.edit_separator()
+        self.mark_set('insert', 'end-1c')
         return 'break'
 
-    def on_ctrl_return(self, event=None):
+    def _move_to_line_start(self, event):
+        index = self.index("insert linestart")
+        self.mark_set("insert", index)
+        self.see(index)
+        return "break"
+
+    def _move_to_line_end(self, event):
+        index = self.index("insert lineend")
+        self.mark_set("insert", index)
+        self.see(index)
+        return "break"
+
+    def on_return(self, event=None):
+        """Handle Return key press with modal for mid-line or multiline editing."""
+        self.edit_separator()
+        input_start = self.index('input')
+        input_end = self.index('end-1c')
+        insert_pos = self.index('insert')
+        full_text = self.get('input', 'end-1c')
+
+        # Avoid popup if the command is blank (only whitespace or empty)
+        if not full_text.strip():
+            self.mark_set('insert', 'end-1c')
+            self.eval_current(True)
+            self.see('end')
+            self._hist_item = len(self.history) 
+            self.history.save()
+            return 'break'
+
+        lines = full_text.splitlines()
+        is_multiline = len(lines) > 1
+
+        # Always show modal for multiline, or for single line if not at end
+        if is_multiline or not self.compare('insert', '==', 'end-1c'):
+            # Gather cursor info
+            cursor_index = self.index('insert')
+            cursor_line, cursor_col = map(int, cursor_index.split('.'))
+            input_line_start = int(input_start.split('.')[0])
+            rel_line = cursor_line - input_line_start
+
+            # Prepare display lines (no marker, just dual color)
+            display_lines = []
+            for i, line in enumerate(lines):
+                if i == 0:
+                    # Add the prompt to the first line
+                    display_lines.append(self._prompt1 + line)
+                else:
+                    display_lines.append(line)
+            display_text = '\n'.join(display_lines)
+
+            def show_modal():
+                modal = tk.Toplevel(self)
+                modal.title("Edit Command")
+                modal.transient(self)
+                modal.grab_set()
+
+                frame = tk.Frame(modal)
+                frame.pack(fill="both", expand=True)
+
+                # Create the Text widget with no wrapping for horizontal scrolling
+                text_widget = tk.Text(frame, wrap="none")
+                text_widget.grid(row=0, column=0, sticky="nsew")
+
+                # Create vertical and horizontal scrollbars
+                yscroll = tk.Scrollbar(frame, orient="vertical", command=text_widget.yview)
+                xscroll = tk.Scrollbar(frame, orient="horizontal", command=text_widget.xview)
+                yscroll.grid(row=0, column=1, sticky="ns")
+                xscroll.grid(row=1, column=0, sticky="ew")
+
+                # Configure the Text widget to use the scrollbars
+                text_widget.configure(yscrollcommand=yscroll.set, xscrollcommand=xscroll.set)
+
+                # Make the frame expandable
+                frame.rowconfigure(0, weight=1)
+                frame.columnconfigure(0, weight=1)
+
+                text_widget.insert("1.0", display_text)
+                text_widget.focus_set()
+
+                # Dual color for the edited line
+                # Determine if editing the first line of the input
+                if rel_line == 0:
+                    prompt_length = len(self._prompt1)
+                    cursor_col_in_input = max(0, cursor_col - prompt_length)
+                    # Add prompt length back for tag indices in the modal
+                    before_cursor_idx = f"{rel_line+1}.0"
+                    cursor_idx = f"{rel_line+1}.{cursor_col_in_input + prompt_length}"
+                else:
+                    before_cursor_idx = f"{rel_line+1}.0"
+                    cursor_idx = f"{rel_line+1}.{cursor_col}"
+                end_idx = f"{rel_line+1}.end"
+
+                # Center the edited line in the text widget
+                def center_line_in_text_widget(text_widget, rel_line1):
+                    def do_scroll():
+                        if not text_widget.winfo_exists():
+                            return  # Widget destroyed
+                        dline = text_widget.dlineinfo("1.0")
+                        if not dline:
+                            text_widget.after(20, do_scroll)
+                            return
+                        line_height = dline[3]
+                        visible_lines = int(text_widget.winfo_height() // line_height)
+                        total_lines = int(text_widget.index("end-1c").split('.')[0])
+                        # Clamp rel_line to valid range
+                        rel_line = max(1, min(rel_line1, total_lines))
+                        first_visible = max(rel_line - visible_lines // 2, 1)
+                        yview_value = (first_visible - 1) / max(total_lines - visible_lines + 1, 1)
+                        text_widget.yview_moveto(yview_value)
+                    text_widget.after(0, do_scroll)
+                center_line_in_text_widget(text_widget, rel_line)
+
+                text_widget.tag_add("before_cursor", before_cursor_idx, cursor_idx)
+                text_widget.tag_configure("before_cursor", background="yellow")
+                text_widget.tag_add("after_cursor", cursor_idx, end_idx)
+                text_widget.tag_configure("after_cursor", background="lightgreen")
+                text_widget.config(state="disabled")
+
+                # Escape closes modal
+                modal.bind("<Escape>", lambda e: modal.destroy())
+
+                # Button actions
+                def confirm_and_execute():
+                    modal.destroy()
+                    self.mark_set('insert', 'end-1c')
+                    self.eval_current(True)
+                    self.see('end')
+                    self.history.save()
+
+                def add_newline_here():
+                    modal.destroy()
+                    self.insert('insert', '\n')
+                    self.insert('insert', self._prompt2, 'prompt')
+                    self.see('insert')
+                    total_lines = int(self.index('end-1c').split('.')[0])
+                    current_line = int(self.index('insert').split('.')[0])
+                    center_frac = max(0, (current_line - int(self['height']) // 2) / max(1, total_lines))
+                    self.yview_moveto(center_frac)
+
+                def remove_current_line():
+                    modal.destroy()
+                    line_start = f"{cursor_line}.0"
+                    line_end = f"{cursor_line}.end+1c"
+                    self.delete(line_start, line_end)
+
+                def do_nothing():
+                    modal.destroy()
+
+                btn_frame = tk.Frame(modal)
+                btn_frame.pack(pady=(0, 10))
+
+                confirm_btn = tk.Button(btn_frame, text="Confirm & Execute", command=confirm_and_execute)
+                confirm_btn.pack(side="left", padx=5)
+                confirm_btn.focus_set()  # Set initial focus
+                confirm_btn.bind("<Return>", lambda e: confirm_and_execute())
+
+                add_btn = tk.Button(btn_frame, text="Add New Line Here", command=add_newline_here)
+                add_btn.pack(side="left", padx=5)
+                add_btn.bind("<Return>", lambda e: add_newline_here())
+
+                remove_btn = tk.Button(btn_frame, text="Remove This Line", command=remove_current_line)
+                remove_btn.pack(side="left", padx=5)
+                remove_btn.bind("<Return>", lambda e: remove_current_line())
+
+                def discard_everything():
+                    modal.destroy()
+                    self.on_escape()  # Or your logic to clear input and reset state
+
+                discard_btn = tk.Button(btn_frame, text="Discard Everything", command=discard_everything)
+                discard_btn.pack(side="left", padx=5)
+
+                nothing_btn = tk.Button(btn_frame, text="Do Nothing", command=do_nothing)
+                nothing_btn.pack(side="left", padx=5)
+                nothing_btn.bind("<Return>", lambda e: do_nothing())
+
+                # After creating and packing the buttons:
+                buttons = [confirm_btn, add_btn, remove_btn, discard_btn, nothing_btn]
+
+                def focus_next(event):
+                    idx = buttons.index(event.widget)
+                    buttons[(idx + 1) % len(buttons)].focus_set()
+                    return "break"
+
+                def focus_prev(event):
+                    idx = buttons.index(event.widget)
+                    buttons[(idx - 1) % len(buttons)].focus_set()
+                    return "break"
+
+                for btn in buttons:
+                    btn.bind("<Right>", focus_next)
+                    btn.bind("<Left>", focus_prev)
+
+                modal.wait_window()
+
+            self.after(10, show_modal)
+            return 'break'
+
+        # Default: execute the command
+        self.eval_current(True)
+        self.see('end')
+        self.history.save()
+        return 'break'
+
+    def insert_line(self, event=None):
         """Handle Ctrl+Return key press"""
-        self.insert('insert', '\n' + self._prompt2, 'prompt')
+        self.edit_separator()
+        self.insert('insert', '\n' + self._prompt2, "prompt" )
         return 'break'
 
     def on_backspace(self, event):
@@ -692,13 +1024,13 @@ class BaseTextConsole(tk.Text):
 
         # Record current insert position as new input mark
         input_index = self.index('insert')
-        self.insert('insert', lines[0][indent:], 'input_color')
+        self.insert('insert', lines[0][indent:])
 
         for line in lines[1:]:
             line = line[indent:]
-            self.insert('insert', '\n', 'input_color')
+            self.insert('insert', '\n')
             self.prompt(True)
-            self.insert('insert', line, 'input_color')
+            self.insert('insert', line)
 
         # Set the 'input' mark at the correct place (start of inserted block)
         self.mark_set('input', input_index)
@@ -709,6 +1041,7 @@ class BaseTextConsole(tk.Text):
         index = self.index('input')
         lines = self.get('input', 'insert lineend').splitlines() # commands to execute
         self.mark_set('insert', 'insert lineend')
+        self._hist_item = len(self.history)  # set history item to the end
         
         if lines:  # there is code to execute
             # remove prompts
@@ -717,7 +1050,7 @@ class BaseTextConsole(tk.Text):
                 if l.endswith('?'):
                     lines[i] = 'help(%s)' % l[:-1]
             cmds = '\n'.join(lines)
-            self.insert('insert', '\n')
+            self.insert('insert', '\n', "output")
             out = StringIO()  # command output
             err = StringIO()  # command error traceback
             with redirect_stderr(err):     # redirect error traceback to err
@@ -755,7 +1088,7 @@ class BaseTextConsole(tk.Text):
                 self.mark_set('input', 'end')
                 self.see('end')
                 if not res and self.compare('insert linestart', '>', 'insert'):
-                    self.insert('insert', '\n')
+                    self.insert('insert', '\n', "output")
                 self.prompt(res)
                 
                 # Handle auto-indentation logic
@@ -765,7 +1098,7 @@ class BaseTextConsole(tk.Text):
                     line = lines[-1].strip()
                     if line and line[-1] == ':':
                         indent = indent + '    '
-                    self.insert('insert', indent)
+                    self.insert('insert', indent, "output")
                 # For complete commands (res is False), don't auto-indent - start fresh
                 
                 self.see('end')
@@ -782,8 +1115,79 @@ class BaseTextConsole(tk.Text):
             out.close()
             err.close()
         else:
-            self.insert('insert', '\n')
+            self.insert('insert', '\n', "output")
             self.prompt()
+
+    def on_key_press(self, event):
+        """
+        Prevent character insertion if the cursor is over a character with any tag (e.g., prompt).
+        """
+        # Only block printable characters (not navigation, etc.)
+        if event.char and event.char.isprintable():
+            cursor_index = self.index("insert")
+            tags = self.tag_names(cursor_index)
+            if tags:
+                return "break"
+
+    def _process_arrows(self, direction):
+        """
+        Handles Left and Right arrow navigation.
+        Does nothing if there is an active selection.
+        """
+        self.edit_separator()
+        try:
+            sel_start = self.index("sel.first")
+            sel_end = self.index("sel.last")
+            # If selection is active, do not process arrow keys
+            return
+        except tk.TclError:
+            pass  # No selection, proceed as normal
+
+        cursor_index = self.index("insert")
+        line_start = self.index(f"{cursor_index} linestart")
+        line_end = self.index(f"{line_start} lineend")
+
+        if direction == "Left":
+            idx = cursor_index
+            while self.compare(idx, ">", line_start):
+                tags = self.tag_names(idx)
+                if not tags:
+                    self.mark_set("insert", idx)
+                    return
+                idx = self.index(f"{idx} -1c")
+            # If we reach the start of the line, check the last character of the previous line
+            if self.compare(idx, "==", line_start):
+                prev_line_num = int(line_start.split('.')[0]) - 1
+                if prev_line_num >= 1:
+                    prev_line_start = f"{prev_line_num}.0"
+                    prev_line_end = self.index(f"{prev_line_start} lineend")
+                    # Check if the last character of the previous line is not tagged
+                    last_char_idx = self.index(f"{prev_line_end} -1c")
+                    tags = self.tag_names(last_char_idx)
+                    if not tags:
+                        self.mark_set("insert", prev_line_end)
+                        return
+                # Otherwise, scan forward to find the first non-tagged character (existing behaviour)
+                scan_idx = line_start
+                line_end = self.index(f"{line_start} lineend")
+                while self.compare(scan_idx, "<", line_end):
+                    tags = self.tag_names(scan_idx)
+                    if not tags:
+                        self.mark_set("insert", scan_idx)
+                        return
+                    scan_idx = self.index(f"{scan_idx} +1c")
+                self.mark_set("insert", line_end)
+
+        elif direction == "Right":
+            idx = cursor_index
+            while self.compare(idx, "<", line_end):
+                tags = self.tag_names(idx)
+                if not tags:
+                    self.mark_set("insert", idx)
+                    return
+                idx = self.index(f"{idx} +1c")
+            # If we reach the end of the line, set cursor there
+            self.mark_set("insert", line_end)
 
 
 class TextConsole(BaseTextConsole):

@@ -1,6 +1,10 @@
 # text_console
 
-*text_console* is a customizable, Tkinter-based interactive shell widget that lets users type commands into a console pane and have them evaluated in your application’s Python environment. It supports arrows and command history. It’s designed for embedding in GUI apps, debugging, scripting, and educational tools.
+*text_console* is a customizable, Tkinter-based interactive shell widget that lets users type commands into a console pane and have them evaluated in your application’s Python environment. It supports arrows and command history. It’s designed for embedding in GUI apps, debugging, scripting, and educational tools as an API Playground.
+
+It can also be used as a standalone Python command interpreter.
+
+This program is similar to [wxPython Shell](https://github.com/wxWidgets/wxPython-Classic/blob/master/wx/py/shell.py), implemented using Tkinter.
 
 ## Key Features
 
@@ -11,6 +15,17 @@
 - **Integrated application context**
 
   Access and modify your app’s variables and functions via the console_locals namespace.
+
+- **Advanced editing**
+    - **Keyboard shortcuts:** all standard keyboard shortcut are allowed
+    - **Multiline editing:** Single line and multiline editing is allowed, also with copy/paste features. When pressing enter within an edited line, a popup appears to ask the requested action (execute the command, add a new line, abort). Shift-Enter is also allowed.
+    - **Prompt Protection:** The prompt area (`>>> ` or `... `) is protected. The cursor cannot move into or before the prompt, and editing actions (insertion, deletion) are blocked in the prompt area.
+    - **Smart Arrow Navigation:** Left and right arrow keys skip over prompt tags and any protected regions, ensuring the cursor only lands in editable areas. Arrow navigation also respects line boundaries and prompt positions.
+    - **Home/End Navigation:** The `Home` and `End` keys move the cursor to the beginning or end of the current line, but never into the prompt area.
+    - **Undo/Redo Support:** Full undo/redo support is enabled (`Ctrl+Z`/`Ctrl+Y`), with fine-grained control for character-by-character undo.
+    - **Tab and Shift+Tab:** Pressing `Tab` inserts four spaces. Pressing `Shift+Tab` removes up to four spaces.
+    - **Selection Awareness:** Editing and navigation actions are aware of text selection. For example, custom arrow key logic is bypassed when a selection is active.
+    - **Clear Console:** The console can be cleared with a single command, automatically restoring the prompt and positioning the cursor for new input.
 
 - **Command history**
 
@@ -37,21 +52,27 @@
 
 ## Installation
 
-### From pypi
-
 ```bash
 pip install text-console
 ```
 
-### From sources
-
-Navigate to the directory containing *setup.py*. Run:
+## Playground
 
 ```
-pip install .
+python -m text_console
 ```
 
-## Usage
+Available options:
+
+```
+Python Console [-h] [-V]
+
+optional arguments:
+  -h, --help     show this help message and exit
+  -V, --version  Print version and exit
+
+A customizable Tkinter-based text console widget.
+```
 
 ### Basic usage with default settings
 

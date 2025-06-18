@@ -848,8 +848,7 @@ class BaseTextConsole(tk.Text):
         return 'break'
 
     def show_command_history_panel(self):
-        panel = CommandHistoryPanel(self, self.history, self.insert_cmd, [self._hist_item])
-        panel.show()
+        CommandHistoryPanel(self, self.history, self.insert_cmd, [self._hist_item])
 
     def insert_line(self, event=None):
         """Handle Ctrl+Return key press"""

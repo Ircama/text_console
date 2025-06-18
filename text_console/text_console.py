@@ -122,6 +122,8 @@ class BaseTextConsole(tk.Text):
             font=("Courier", font_size - 2)
         )
         self.tag_configure("output", foreground="#00178c")
+        self.tag_configure("number", foreground="#0066cc", font=("Consolas", 10, "bold"))
+        self.tag_configure("number_hover", background="#e0f0ff")
 
     def setup_bindings(self):
         """Set up key bindings"""
@@ -145,10 +147,10 @@ class BaseTextConsole(tk.Text):
         self.bind("<KeyPress>", self.on_key_press)
         self.bind("<Home>", lambda e: self._move_to_line_start(e))
         self.bind("<End>", lambda e: self._move_to_line_end(e))
-        self.bind('<Control-r>', self.remove_current_history_entry)
-        self.bind('<Control-p>', self.increase_font_size)
-        self.bind('<Control-o>', self.decrease_font_size)
-        self.bind('<Control-i>', self.reset_font_size)
+        self.bind('<Control-k>', self.remove_current_history_entry)
+        self.bind('<Control-plus>', self.increase_font_size)
+        self.bind('<Control-minus>', self.decrease_font_size)
+        self.bind('<Control-0>', self.reset_font_size)
 
     def get_font(self):
         font_name = self.cget("font")
@@ -408,6 +410,7 @@ class BaseTextConsole(tk.Text):
         
         # Configure text tags for styling
         history_txt.tag_configure("number", foreground="#0066cc", font=("Consolas", 10, "bold"))
+        history_txt.tag_configure("number_hover", background="#e0f0ff")
         history_txt.tag_configure("separator", foreground="#888888")
         history_txt.tag_configure("command", foreground="#000000", font=("Consolas", 10))
         history_txt.tag_configure("divider", foreground="#cccccc")
@@ -444,6 +447,28 @@ class BaseTextConsole(tk.Text):
             if event and event.widget == history_window:
                 update_display()
         
+        def on_number_double_click(event):
+            index = history_txt.index(f"@{event.x},{event.y}")
+            line = int(index.split('.')[0])
+            num_text = history_txt.get(f"{line}.0", f"{line}.end").split('│')[0].strip()
+            try:
+                hist_index = int(num_text) - 1
+                if 0 <= hist_index < len(self.history):
+                    self._hist_item = hist_index
+                    self.insert_cmd(self.history[hist_index])
+                    history_window.lift()
+            except Exception:
+                pass
+
+        def on_number_enter(event):
+            history_txt.config(cursor="hand2")
+            index = history_txt.index(f"@{event.x},{event.y}")
+            line = index.split('.')[0]
+            history_txt.tag_add("number_hover", f"{line}.0", f"{line}.end")
+        def on_number_leave(event):
+            history_txt.config(cursor="")
+            history_txt.tag_remove("number_hover", "1.0", "end")
+
         def update_display():
             history_txt.config(state="normal")
             history_txt.delete("1.0", "end")
@@ -465,9 +490,13 @@ class BaseTextConsole(tk.Text):
                 # First line with number
                 first_line = command_lines[0] if command_lines else ""
                 
+                start_idx = history_txt.index("end-1c")
                 history_txt.insert("end", f"{item_number:<{num_width}}", "number")
                 history_txt.insert("end", " │ ", "separator")
                 history_txt.insert("end", f"{first_line}\n", "command")
+                end_idx = history_txt.index("end-1c")
+                # Tag the number for double-click
+                history_txt.tag_add(f"numtag_{item_number}", start_idx, f"{start_idx.split('.')[0]}.end")
                 
                 # Additional lines (if multiline command)
                 for line in command_lines[1:]:
@@ -480,44 +509,14 @@ class BaseTextConsole(tk.Text):
                     # More efficient: insert a single line character repeated
                     history_txt.insert("end", "─" * total_width, "divider")
                     history_txt.insert("end", "\n")
+            
+            # Bind double-click for all number tags
+            for i in range(1, len(self.history)+1):
+                history_txt.tag_bind(f"numtag_{i}", "<Double-Button-1>", on_number_double_click)
+                history_txt.tag_bind(f"numtag_{i}", "<Enter>", on_number_enter)
+                history_txt.tag_bind(f"numtag_{i}", "<Leave>", on_number_leave)
         
-        # Copy functionality
-        def copy_selected_command():
-            try:
-                # Get selected text
-                selected_text = history_txt.selection_get()
-                if selected_text:
-                    history_window.clipboard_clear()
-                    history_window.clipboard_append(selected_text)
-            except tk.TclError:
-                # No selection, try to get the line under cursor
-                current_line = history_txt.index(tk.INSERT).split('.')[0]
-                line_content = history_txt.get(f"{current_line}.0", f"{current_line}.end")
-                
-                # Extract command part (after the │ separator)
-                if " │ " in line_content:
-                    command_part = line_content.split(" │ ", 1)[1]
-                    history_window.clipboard_clear()
-                    history_window.clipboard_append(command_part)
-        
-        # Context menu
-        context_menu = tk.Menu(history_window, tearoff=0)
-        context_menu.add_command(label="Copy Selected", command=copy_selected_command)
-        context_menu.add_command(label="Select All", command=lambda: history_txt.tag_add("sel", "1.0", "end"))
-        
-        def show_context_menu(event):
-            try:
-                context_menu.tk_popup(event.x_root, event.y_root)
-            finally:
-                context_menu.grab_release()
-        
-        # Bind events
-        history_txt.bind("<Button-3>", show_context_menu)  # Right-click
-        history_txt.bind("<Control-c>", lambda e: copy_selected_command())
-        history_txt.bind("<Double-Button-1>", lambda e: copy_selected_command())
-        
-        # Bind window resize
-        history_window.bind("<Configure>", on_window_configure)
+            history_txt.config(state="disabled")
         
         # Initial display with proper timing
         def delayed_setup():
@@ -545,7 +544,6 @@ class BaseTextConsole(tk.Text):
         
         # Focus on the most recent command (scroll to top)
         history_txt.see("1.0")
-
 
     def on_ctrl_c(self, event):
         """Copy selected code, removing prompts first"""

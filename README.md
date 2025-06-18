@@ -249,3 +249,7 @@ class MyCustomConsole(TextConsole):
 # Use the custom console
 text_console = MyCustomConsole(main, master)
 ```
+
+## Limitations
+
+*text\_console* does **not** support **Ctrl+C** to abort long‑running commands. Because the console is designed as an embeddable in-process API playground within a Tkinter process, it cannot leverage **multiprocessing** to provide real interrupt semantics, which would fork a separate Python environment, breaking the API. Likewise, **multithreading** cannot forcibly terminate an executing function due to Python’s **Global Interpreter Lock (GIL)** and the absence of a built-in thread‑kill API. Furthermore, Tkinter itself offers no mechanism to cancel an in‑progress widget callback or command/code evaluation and it runs inside an event loop rather than the standard Python REPL. Consequently, users must wait for blocking operations to finish.

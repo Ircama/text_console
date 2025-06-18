@@ -103,6 +103,9 @@ class BaseTextConsole(tk.Text):
         self.mark_gravity('input', 'left')
         self.focus_set()
 
+        # Add this attribute in your __init__ method if not present
+        self.history_panel = None
+
     def setup_tags(self):
         """Set up text tags for styling"""
         font_obj = tkfont.nametofont(self.cget("font"))
@@ -848,7 +851,21 @@ class BaseTextConsole(tk.Text):
         return 'break'
 
     def show_command_history_panel(self):
-        CommandHistoryPanel(self, self.history, self.insert_cmd, [self._hist_item])
+        # If already open and not destroyed, bring to front and focus
+        if self.history_panel is not None and self.history_panel.winfo_exists():
+            self.history_panel.lift()
+            self.history_panel.focus_force()
+            self.history_panel.search_entry.focus_set()
+            return
+
+        # Otherwise, create a new panel
+        self.history_panel = CommandHistoryPanel(self, self.history, self.insert_cmd, [self._hist_item])
+
+        # When the panel is closed, clear the reference
+        def on_panel_close():
+            self.history_panel.destroy()
+            self.history_panel = None
+        self.history_panel.protocol("WM_DELETE_WINDOW", on_panel_close)
 
     def insert_line(self, event=None):
         """Handle Ctrl+Return key press"""
@@ -898,6 +915,12 @@ class BaseTextConsole(tk.Text):
 
     def eval_current(self, auto_indent=False):
         """Evaluate code"""
+        # Close history panel if open
+        try:
+            self.history_panel.destroy()
+        except Exception:
+            pass
+
         index = self.index('input')
         lines = self.get('input', 'insert lineend').splitlines() # commands to execute
         self.mark_set('insert', 'insert lineend')
@@ -977,14 +1000,6 @@ class BaseTextConsole(tk.Text):
         else:
             self.insert('insert', '\n', "output")
             self.prompt()
-
-        # Close history panel if open
-        if hasattr(self, '_history_window') and self._history_window is not None:
-            try:
-                self._history_window.destroy()
-            except Exception:
-                pass
-            self._history_window = None
 
     def on_key_press(self, event):
         """

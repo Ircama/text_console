@@ -124,6 +124,8 @@ class BaseTextConsole(tk.Text):
         self.tag_configure("output", foreground="#00178c")
         self.tag_configure("number", foreground="#0066cc", font=("Consolas", 10, "bold"))
         self.tag_configure("number_hover", background="#e0f0ff")
+        self.tag_configure("nonselectable", foreground="#0066cc", font=("Consolas", 10, "bold"), selectbackground="white", selectforeground="#0066cc")
+        self.tag_configure("divider", foreground="#cccccc", selectbackground="white", selectforeground="#cccccc")
 
     def setup_bindings(self):
         """Set up key bindings"""
@@ -413,8 +415,9 @@ class BaseTextConsole(tk.Text):
         history_txt.tag_configure("number_hover", background="#e0f0ff")
         history_txt.tag_configure("separator", foreground="#888888")
         history_txt.tag_configure("command", foreground="#000000", font=("Consolas", 10))
-        history_txt.tag_configure("divider", foreground="#cccccc")
-        
+        history_txt.tag_configure("divider", foreground="#cccccc", selectbackground="white", selectforeground="#cccccc")
+        history_txt.tag_configure("nonselectable", foreground="#0066cc", font=("Consolas", 10, "bold"), selectbackground="white", selectforeground="#0066cc")
+
         # Calculate column width based on window size and longest command
         def calculate_layout():
             # Get actual text widget width in characters
@@ -469,6 +472,24 @@ class BaseTextConsole(tk.Text):
             history_txt.config(cursor="")
             history_txt.tag_remove("number_hover", "1.0", "end")
 
+        def on_selection(event=None):
+            try:
+                sel_start = history_txt.index("sel.first")
+                sel_end = history_txt.index("sel.last")
+                start_line = int(sel_start.split('.')[0])
+                end_line = int(sel_end.split('.')[0])
+                for line in range(start_line, end_line + 1):
+                    line_content = history_txt.get(f"{line}.0", f"{line}.end")
+                    sep_index = line_content.find("│")
+                    if sep_index != -1:
+                        # Remove selection from number column
+                        history_txt.tag_remove("sel", f"{line}.0", f"{line}.{sep_index+1}")
+                    # Remove selection from divider lines
+                    if set(line_content.strip()) == {"─"}:
+                        history_txt.tag_remove("sel", f"{line}.0", f"{line}.end")
+            except tk.TclError:
+                pass
+
         def update_display():
             history_txt.config(state="normal")
             history_txt.delete("1.0", "end")
@@ -483,30 +504,19 @@ class BaseTextConsole(tk.Text):
             for i, command in enumerate(reversed(self.history)):
                 item_number = len(self.history) - i
                 command_text = str(command).strip()
-                
-                # Split command into lines
                 command_lines = command_text.split('\n')
-                
-                # First line with number
                 first_line = command_lines[0] if command_lines else ""
-                
                 start_idx = history_txt.index("end-1c")
-                history_txt.insert("end", f"{item_number:<{num_width}}", "number")
-                history_txt.insert("end", " │ ", "separator")
+                history_txt.insert("end", f"{item_number:<{num_width}}", ("number", "nonselectable"))
+                history_txt.insert("end", " │ ", ("separator", "nonselectable"))
                 history_txt.insert("end", f"{first_line}\n", "command")
                 end_idx = history_txt.index("end-1c")
-                # Tag the number for double-click
                 history_txt.tag_add(f"numtag_{item_number}", start_idx, f"{start_idx.split('.')[0]}.end")
-                
-                # Additional lines (if multiline command)
                 for line in command_lines[1:]:
-                    history_txt.insert("end", f"{'':<{num_width}}", "")
-                    history_txt.insert("end", " │ ", "separator")
+                    history_txt.insert("end", f"{'':<{num_width}}", "nonselectable")
+                    history_txt.insert("end", " │ ", ("separator", "nonselectable"))
                     history_txt.insert("end", f"{line}\n", "command")
-                
-                # Add horizontal line separator between commands (except for the last one)
                 if i < len(self.history) - 1:
-                    # More efficient: insert a single line character repeated
                     history_txt.insert("end", "─" * total_width, "divider")
                     history_txt.insert("end", "\n")
             
@@ -544,6 +554,47 @@ class BaseTextConsole(tk.Text):
         
         # Focus on the most recent command (scroll to top)
         history_txt.see("1.0")
+
+        def copy_selected_command(event=None):
+            try:
+                sel_start = history_txt.index("sel.first")
+                sel_end = history_txt.index("sel.last")
+                start_line = int(sel_start.split('.')[0])
+                end_line = int(sel_end.split('.')[0])
+                result_lines = []
+                for line in range(start_line, end_line + 1):
+                    line_content = history_txt.get(f"{line}.0", f"{line}.end")
+                    # Skip divider lines
+                    if set(line_content.strip()) == {"─"}:
+                        continue
+                    sep_index = line_content.find("│")
+                    if sep_index != -1:
+                        # Preserve all whitespace after the separator
+                        command_part = line_content[sep_index+1:]
+                        sel_line_start = max(int(sel_start.split('.')[1]), 0) if line == start_line else 0
+                        sel_line_end = int(sel_end.split('.')[1]) if line == end_line else len(line_content)
+                        # Only add if selection is after separator
+                        if sel_line_end > sep_index:
+                            result_lines.append(command_part.rstrip("\n"))
+                    else:
+                        result_lines.append(line_content.rstrip("\n"))
+                command_text = '\n'.join(result_lines).rstrip("\n")
+                if command_text:
+                    history_window.clipboard_clear()
+                    history_window.clipboard_append(command_text)
+            except tk.TclError:
+                pass
+            return "break"
+        
+        history_txt.bind("<Control-c>", copy_selected_command)
+        history_txt.bind("<Control-C>", copy_selected_command)
+        
+        context_menu = tk.Menu(history_window, tearoff=0)
+        context_menu.add_command(label="Copy Selected", command=copy_selected_command)
+        context_menu.add_command(label="Close", command=history_window.destroy)
+        history_window.bind("<Button-3>", lambda e: context_menu.post(e.x_root, e.y_root))
+        history_window.bind("<Control-w>", lambda e: history_window.destroy())
+        history_window.bind("<Escape>", lambda e: history_window.destroy())
 
     def on_ctrl_c(self, event):
         """Copy selected code, removing prompts first"""

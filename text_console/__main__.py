@@ -3,11 +3,11 @@ import argparse
 import tkinter as tk
 import webbrowser
 
-from . import TextConsole
+from . import BaseTextConsole
 from .__version__ import __version__
 
 
-class TkTextConsole(TextConsole):
+class TkTextConsole(BaseTextConsole):
 
     """Subclass that adds the second element to the Help menu."""
     def create_menu(self, main, master):

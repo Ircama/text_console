@@ -355,10 +355,23 @@ class BaseTextConsole(tk.Text):
 
 
     def dump_history(self):
-        """Open a separate window with the output of the history."""
-        history_window = tk.Toplevel(self)
+        """Open a separate window with the output of the history, or raise it if already open."""
+        if hasattr(self, '_history_window') and self._history_window is not None:
+            try:
+                self._history_window.lift()
+                self._history_window.focus_force()
+                return
+            except Exception:
+                self._history_window = None  # Window was closed externally
+        self._history_window = tk.Toplevel(self)
+        history_window = self._history_window
         history_window.title("Command History")
         history_window.geometry("600x600")
+        
+        def on_close():
+            self._history_window = None
+            history_window.destroy()
+        history_window.protocol("WM_DELETE_WINDOW", on_close)
         
         # Create main frame
         main_frame = tk.Frame(history_window)
@@ -467,7 +480,10 @@ class BaseTextConsole(tk.Text):
             history_txt.config(cursor="hand2")
             index = history_txt.index(f"@{event.x},{event.y}")
             line = index.split('.')[0]
-            history_txt.tag_add("number_hover", f"{line}.0", f"{line}.end")
+            # Only highlight the number column, not the command
+            sep_index = history_txt.get(f"{line}.0", f"{line}.end").find("│")
+            if sep_index != -1:
+                history_txt.tag_add("number_hover", f"{line}.0", f"{line}.{sep_index}")
         def on_number_leave(event):
             history_txt.config(cursor="")
             history_txt.tag_remove("number_hover", "1.0", "end")

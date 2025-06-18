@@ -8,6 +8,7 @@ from io import StringIO
 from contextlib import redirect_stdout, redirect_stderr
 
 from .history import History
+from .command_history import CommandHistoryPanel
 from .__version__ import __version__
 
 
@@ -100,6 +101,7 @@ class BaseTextConsole(tk.Text):
         self.prompt()
         self.mark_set('input', 'insert')
         self.mark_gravity('input', 'left')
+        self.focus_set()
 
     def setup_tags(self):
         """Set up text tags for styling"""
@@ -153,6 +155,7 @@ class BaseTextConsole(tk.Text):
         self.bind('<Control-plus>', self.increase_font_size)
         self.bind('<Control-minus>', self.decrease_font_size)
         self.bind('<Control-0>', self.reset_font_size)
+        self.bind('<Control-r>', lambda e: self.show_command_history())
 
     def get_font(self):
         font_name = self.cget("font")
@@ -245,7 +248,7 @@ class BaseTextConsole(tk.Text):
         # History menu
         history_menu = Menu(menu_bar, tearoff=0)
         history_menu.add_command(
-            label="List history", command=self.dump_history
+            label="List history", command=self.show_command_history
         )
         history_menu.add_checkbutton(
             label="Save Errors in History",
@@ -353,264 +356,25 @@ class BaseTextConsole(tk.Text):
         self.mark_set('input', 'end-1c')
         self.edit_reset()
 
-
-    def dump_history(self):
-        """Open a separate window with the output of the history, or raise it if already open."""
+    def show_command_history(self):
         if hasattr(self, '_history_window') and self._history_window is not None:
             try:
-                self._history_window.lift()
-                self._history_window.focus_force()
+                self._history_window.window.lift()
+                self._history_window.window.focus_force()
                 return
             except Exception:
-                self._history_window = None  # Window was closed externally
-        self._history_window = tk.Toplevel(self)
-        history_window = self._history_window
-        history_window.title("Command History")
-        history_window.geometry("600x600")
-        
+                self._history_window = None
         def on_close():
             self._history_window = None
-            history_window.destroy()
-        history_window.protocol("WM_DELETE_WINDOW", on_close)
-        
-        # Create main frame
-        main_frame = tk.Frame(history_window)
-        main_frame.pack(fill="both", expand=True, padx=10, pady=10)
-        
-        # Create fixed header frame
-        header_frame = tk.Frame(main_frame, bg="white", relief="solid", bd=1)
-        header_frame.pack(fill="x", pady=(0, 5))
-        
-        # Header label
-        header_label = tk.Label(
-            header_frame, 
-            text="№     │ Command",
-            font=("Consolas", 10, "bold"),
-            fg="#000080",
-            bg="white",
-            anchor="w",
-            padx=5,
-            pady=3
+        self._history_window = CommandHistoryPanel(
+            master=self,
+            history=self.history,
+            insert_cmd_callback=self.insert_cmd,
+            hist_item_ref=[self._hist_item],
+            close_callback=on_close
         )
-        header_label.pack(fill="x")
-        
-        # Create text widget frame
-        text_frame = tk.Frame(main_frame)
-        text_frame.pack(fill="both", expand=True)
-        
-        # Scrollbars
-        v_scrollbar = tk.Scrollbar(text_frame, orient="vertical")
-        h_scrollbar = tk.Scrollbar(text_frame, orient="horizontal")
-        
-        # Text widget
-        history_txt = tk.Text(
-            text_frame, 
-            wrap="none",  # No wrapping to maintain table format
-            yscrollcommand=v_scrollbar.set,
-            xscrollcommand=h_scrollbar.set,
-            font=("Consolas", 10),
-            bg="white",
-            fg="black",
-            selectbackground="#cce7ff"
-        )
-        
-        # Configure scrollbars
-        v_scrollbar.config(command=history_txt.yview)
-        h_scrollbar.config(command=history_txt.xview)
-        
-        # Pack scrollbars and text widget
-        v_scrollbar.pack(side="right", fill="y")
-        h_scrollbar.pack(side="bottom", fill="x")
-        history_txt.pack(fill="both", expand=True)
-        
-        # Configure text tags for styling
-        history_txt.tag_configure("number", foreground="#0066cc", font=("Consolas", 10, "bold"))
-        history_txt.tag_configure("number_hover", background="#e0f0ff")
-        history_txt.tag_configure("separator", foreground="#888888")
-        history_txt.tag_configure("command", foreground="#000000", font=("Consolas", 10))
-        history_txt.tag_configure("divider", foreground="#cccccc", selectbackground="white", selectforeground="#cccccc")
-        history_txt.tag_configure("nonselectable", foreground="#0066cc", font=("Consolas", 10, "bold"), selectbackground="white", selectforeground="#0066cc")
 
-        # Calculate column width based on window size and longest command
-        def calculate_layout():
-            # Get actual text widget width in characters
-            try:
-                # Get the actual width of the text widget in pixels
-                text_width_pixels = history_txt.winfo_width()
-                # Convert to approximate character width (assuming monospace font)
-                char_width = 8  # Approximate width of Consolas 10pt character
-                widget_width = max(80, text_width_pixels // char_width)
-            except:
-                # Fallback if widget not yet rendered
-                widget_width = max(100, (history_window.winfo_width() - 80) // 8)
-            
-            # Find the longest command to determine if we need to use horizontal scrolling
-            max_command_length = 0
-            for command in self.history:
-                for line in str(command).split('\n'):
-                    max_command_length = max(max_command_length, len(line))
-            
-            # Number column width (always fixed)
-            num_width = max(5, len(str(len(self.history))))
-            
-            # Command column gets remaining width, but ensure minimum readability
-            cmd_width = max(50, widget_width - num_width - 3)  # 3 for separators
-            
-            return num_width, cmd_width, max_command_length, widget_width
-        
-        # Update layout when window resizes
-        def on_window_configure(event=None):
-            if event and event.widget == history_window:
-                update_display()
-        
-        def on_number_double_click(event):
-            index = history_txt.index(f"@{event.x},{event.y}")
-            line = int(index.split('.')[0])
-            num_text = history_txt.get(f"{line}.0", f"{line}.end").split('│')[0].strip()
-            try:
-                hist_index = int(num_text) - 1
-                if 0 <= hist_index < len(self.history):
-                    self._hist_item = hist_index
-                    self.insert_cmd(self.history[hist_index])
-                    history_window.lift()
-            except Exception:
-                pass
-
-        def on_number_enter(event):
-            history_txt.config(cursor="hand2")
-            index = history_txt.index(f"@{event.x},{event.y}")
-            line = index.split('.')[0]
-            # Only highlight the number column, not the command
-            sep_index = history_txt.get(f"{line}.0", f"{line}.end").find("│")
-            if sep_index != -1:
-                history_txt.tag_add("number_hover", f"{line}.0", f"{line}.{sep_index}")
-        def on_number_leave(event):
-            history_txt.config(cursor="")
-            history_txt.tag_remove("number_hover", "1.0", "end")
-
-        def on_selection(event=None):
-            try:
-                sel_start = history_txt.index("sel.first")
-                sel_end = history_txt.index("sel.last")
-                start_line = int(sel_start.split('.')[0])
-                end_line = int(sel_end.split('.')[0])
-                for line in range(start_line, end_line + 1):
-                    line_content = history_txt.get(f"{line}.0", f"{line}.end")
-                    sep_index = line_content.find("│")
-                    if sep_index != -1:
-                        # Remove selection from number column
-                        history_txt.tag_remove("sel", f"{line}.0", f"{line}.{sep_index+1}")
-                    # Remove selection from divider lines
-                    if set(line_content.strip()) == {"─"}:
-                        history_txt.tag_remove("sel", f"{line}.0", f"{line}.end")
-            except tk.TclError:
-                pass
-
-        def update_display():
-            history_txt.config(state="normal")
-            history_txt.delete("1.0", "end")
-            
-            num_width, cmd_width, max_cmd_length, total_width = calculate_layout()
-            
-            # Update header to match current layout
-            header_text = f"{'№':<{num_width}}│ Command"
-            header_label.config(text=header_text)
-            
-            # Add commands (most recent first)
-            for i, command in enumerate(reversed(self.history)):
-                item_number = len(self.history) - i
-                command_text = str(command).strip()
-                command_lines = command_text.split('\n')
-                first_line = command_lines[0] if command_lines else ""
-                start_idx = history_txt.index("end-1c")
-                history_txt.insert("end", f"{item_number:<{num_width}}", ("number", "nonselectable"))
-                history_txt.insert("end", " │ ", ("separator", "nonselectable"))
-                history_txt.insert("end", f"{first_line}\n", "command")
-                end_idx = history_txt.index("end-1c")
-                history_txt.tag_add(f"numtag_{item_number}", start_idx, f"{start_idx.split('.')[0]}.end")
-                for line in command_lines[1:]:
-                    history_txt.insert("end", f"{'':<{num_width}}", "nonselectable")
-                    history_txt.insert("end", " │ ", ("separator", "nonselectable"))
-                    history_txt.insert("end", f"{line}\n", "command")
-                if i < len(self.history) - 1:
-                    history_txt.insert("end", "─" * total_width, "divider")
-                    history_txt.insert("end", "\n")
-            
-            # Bind double-click for all number tags
-            for i in range(1, len(self.history)+1):
-                history_txt.tag_bind(f"numtag_{i}", "<Double-Button-1>", on_number_double_click)
-                history_txt.tag_bind(f"numtag_{i}", "<Enter>", on_number_enter)
-                history_txt.tag_bind(f"numtag_{i}", "<Leave>", on_number_leave)
-        
-            history_txt.config(state="disabled")
-        
-        # Initial display with proper timing
-        def delayed_setup():
-            update_display()
-            # Set focus to the text widget for keyboard navigation
-            history_txt.focus_set()
-            history_txt.see("1.0")  # Scroll to top (most recent command)
-        
-        history_window.after(200, delayed_setup)  # Increased delay to ensure widget is fully rendered
-        
-        # Make text read-only
-        history_txt.config(state="disabled")
-        
-        # Status bar
-        status_frame = tk.Frame(main_frame)
-        status_frame.pack(fill="x", pady=(5, 0))
-        
-        status_label = tk.Label(
-            status_frame, 
-            text=f"Total commands: {len(self.history)}. Right-click or Ctrl+C to copy. Double-click to copy line",
-            relief="sunken",
-            anchor="w"
-        )
-        status_label.pack(fill="x")
-        
-        # Focus on the most recent command (scroll to top)
-        history_txt.see("1.0")
-
-        def copy_selected_command(event=None):
-            try:
-                sel_start = history_txt.index("sel.first")
-                sel_end = history_txt.index("sel.last")
-                start_line = int(sel_start.split('.')[0])
-                end_line = int(sel_end.split('.')[0])
-                result_lines = []
-                for line in range(start_line, end_line + 1):
-                    line_content = history_txt.get(f"{line}.0", f"{line}.end")
-                    # Skip divider lines
-                    if set(line_content.strip()) == {"─"}:
-                        continue
-                    sep_index = line_content.find("│")
-                    if sep_index != -1:
-                        # Preserve all whitespace after the separator
-                        command_part = line_content[sep_index+1:]
-                        sel_line_start = max(int(sel_start.split('.')[1]), 0) if line == start_line else 0
-                        sel_line_end = int(sel_end.split('.')[1]) if line == end_line else len(line_content)
-                        # Only add if selection is after separator
-                        if sel_line_end > sep_index:
-                            result_lines.append(command_part.rstrip("\n"))
-                    else:
-                        result_lines.append(line_content.rstrip("\n"))
-                command_text = '\n'.join(result_lines).rstrip("\n")
-                if command_text:
-                    history_window.clipboard_clear()
-                    history_window.clipboard_append(command_text)
-            except tk.TclError:
-                pass
-            return "break"
-        
-        history_txt.bind("<Control-c>", copy_selected_command)
-        history_txt.bind("<Control-C>", copy_selected_command)
-        
-        context_menu = tk.Menu(history_window, tearoff=0)
-        context_menu.add_command(label="Copy Selected", command=copy_selected_command)
-        context_menu.add_command(label="Close", command=history_window.destroy)
-        history_window.bind("<Button-3>", lambda e: context_menu.post(e.x_root, e.y_root))
-        history_window.bind("<Control-w>", lambda e: history_window.destroy())
-        history_window.bind("<Escape>", lambda e: history_window.destroy())
+    # dump_history has been moved to command_history.py as CommandHistoryPanel
 
     def on_ctrl_c(self, event):
         """Copy selected code, removing prompts first"""
@@ -760,7 +524,6 @@ class BaseTextConsole(tk.Text):
                 return "break"
             # Get current input line for matching
             first_line_input = self.get('input', 'insert')
-            
             # If we're starting a new search (first up arrow press), initialize
             if self._hist_item == len(self.history):
                 self._hist_match = first_line_input
@@ -1232,6 +995,14 @@ class BaseTextConsole(tk.Text):
             self.insert('insert', '\n', "output")
             self.prompt()
 
+        # Close history panel if open
+        if hasattr(self, '_history_window') and self._history_window is not None:
+            try:
+                self._history_window.destroy()
+            except Exception:
+                pass
+            self._history_window = None
+
     def on_key_press(self, event):
         """
         Prevent character insertion if the cursor is over a character with any tag (e.g., prompt).
@@ -1302,8 +1073,3 @@ class BaseTextConsole(tk.Text):
                 idx = self.index(f"{idx} +1c")
             # If we reach the end of the line, set cursor there
             self.mark_set("insert", line_end)
-
-
-class TextConsole(BaseTextConsole):
-    """Default implementation of the console"""
-    pass

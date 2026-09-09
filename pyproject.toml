@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=77.0.3"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "text_console"
+description = "A customizable Tkinter-based text console widget, in which a user types in commands to be sent to the Python interpreter."
+readme = { file = "README.md", content-type = "text/markdown" }
+license = "EUPL-1.2"
+license-files = ["LICENSE"]
+authors = [
+    { name = "Ircama" },
+]
+requires-python = ">=3.9"
+keywords = ["shell", "console", "tkinter"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dynamic = ["version"]
+
+[project.urls]
+Homepage = "https://github.com/Ircama/text_console"
+Documentation = "https://ircama.github.io/text_console"
+
+[project.scripts]
+text_console = "text_console.__main__:main"
+
+[tool.setuptools]
+packages = ["text_console"]
+
+[tool.setuptools.dynamic]
+version = { attr = "text_console.__version__.__version__" }

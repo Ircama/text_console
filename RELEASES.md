@@ -8,11 +8,9 @@ Do not remove '# Connecting' in README.md.
 
 If a version needs to be changed, edit `text_console/__version__.py`.
 
-This file is read by *setup.py*.
+This file is read by *pyproject.toml* (dynamic version attribute).
 
 If the version is not changed, the publishing procedure works using the same version with a different build number.
-
-The GITHUB_RUN_NUMBER environment variable, when available, is read by *setup.py*.
 
 Push all changes:
 
@@ -89,20 +87,6 @@ cd <repository directory>
 
 ```shell
 python3 -m build --sdist --wheel --outdir dist/ .
-python3 -m twine upload --repository testpypi dist/*
-```
-
-## Local build (using setup):
-
-```shell
-python3 setup.py sdist bdist_wheel
-python3 -m twine upload --repository testpypi dist/*
-```
-
-## Local build (using build versions):
-
-```shell
-GITHUB_RUN_NUMBER=31 python3 setup.py sdist bdist_wheel
 python3 -m twine upload --repository testpypi dist/*
 ```
 

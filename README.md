@@ -92,6 +92,8 @@ In the History Panel:
 
 ## Installation
 
+Requires Python 3.9 or later (including Python 3.14).
+
 ```bash
 pip install text-console
 ```
@@ -107,7 +109,7 @@ Available options:
 ```
 Python Console [-h] [-V]
 
-optional arguments:
+options:
   -h, --help     show this help message and exit
   -V, --version  Print version and exit
 
@@ -208,8 +210,8 @@ class MyCustomConsole(TextConsole):
     def custom_action(self):
         print("Custom action executed!")
     
-    def create_menu(self, master):
-        # Override to create a custom menu
+    def create_menu(self, main, master):
+        # Extend the menu created by the base class
         super().create_menu(main, master)
         
         # Add "Web Site" to the Help menu
@@ -221,20 +223,11 @@ class MyCustomConsole(TextConsole):
             command=self.new_action
         )
 
-        # Override to create a custom menu
-        menu_bar = Menu(master)
-        master.config(menu=menu_bar)
-        
-        # Custom menu items
-        custom_menu = Menu(menu_bar, tearoff=0)
-        custom_menu.add_command(label="My Action", command=self.custom_action)
-        menu_bar.add_cascade(label="Custom", menu=custom_menu)
-
     def new_action(self):
         pass
 
     """ Alternatively, override create_menu:
-    def create_menu(self, master):
+    def create_menu(self, main, master):
         # Override to create a custom menu
         menu_bar = Menu(master)
         master.config(menu=menu_bar)
@@ -253,3 +246,7 @@ text_console = MyCustomConsole(main, master)
 ## Limitations
 
 *text\_console* does **not** support **Ctrl+C** to abort long‑running commands. Because the console is designed as an embeddable in-process API playground within a Tkinter process, it cannot leverage **multiprocessing** to provide real interrupt semantics, which would fork a separate Python environment, breaking the API. Likewise, **multithreading** cannot forcibly terminate an executing function due to Python’s **Global Interpreter Lock (GIL)** and the absence of a built-in thread‑kill API. Furthermore, Tkinter itself offers no mechanism to cancel an in‑progress widget callback or command/code evaluation and it runs inside an event loop rather than the standard Python REPL. Consequently, users must wait for blocking operations to finish.
+
+## License
+
+EUPL-1.2 License - See [LICENSE](LICENSE) for details.
